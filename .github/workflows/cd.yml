@@ -40,7 +40,7 @@ jobs:
       commit: ${{ steps.info.outputs.commit }}
     steps:
       - name: Baixar código
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref || github.sha }}
 
@@ -90,7 +90,7 @@ jobs:
       USE_OIDC: ${{ secrets.AZURE_CLIENT_ID != '' }}
     steps:
       - name: Baixar script de smoke test
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           sparse-checkout: scripts
 
