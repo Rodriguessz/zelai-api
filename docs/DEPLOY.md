@@ -99,6 +99,36 @@ O alerta de Health Check já avisa quando a API cai. Para ter também um teste e
 2. URL: `https://<APP_NAME>.azurewebsites.net/health`, frequência 5 min, 3 regiões.
 3. Em **Alerts**, use o Action Group `ag-<APP_NAME>`.
 
+## Problemas comuns
+
+**`MissingSubscriptionRegistration`: "The subscription is not registered to use namespace 'Microsoft.X'"**
+
+Assinaturas novas vêm com poucos *resource providers* ativos. O script já registra os necessários no passo 0. Se precisar registrar manualmente:
+
+```bash
+az provider register --namespace Microsoft.KeyVault --wait
+```
+
+Depois, rode o script de novo: ele continua de onde parou.
+
+**`Timeout waiting for token from portal. Audience: https://graph.microsoft.com/`**
+
+O Cloud Shell não conseguiu o token do Microsoft Graph, usado só para criar a identidade OIDC. Não é problema da conta nem do script. Refaça o login e rode o script de novo:
+
+```bash
+az logout
+```
+
+```bash
+az login --scope "https://graph.microsoft.com//.default"
+```
+
+Se continuar falhando, o script termina mesmo assim e avisa: use o **plano B** (seção 5).
+
+**`The resource ... is not available in location` (PostgreSQL ou App Service)**
+
+Algumas assinaturas de estudante bloqueiam certas regiões para certos serviços. Rode de novo com outra região, por exemplo `LOCATION=eastus2` ou `LOCATION=brazilsouth`. Se o Resource Group já foi criado em outra região, não tem problema: os recursos podem ficar em regiões diferentes do grupo.
+
 ## 5. Plano B: sem permissão para OIDC
 
 Contas institucionais às vezes não podem criar registros de aplicativo no Entra ID. O script avisa quando isso acontece. Nesse caso:
