@@ -37,8 +37,9 @@ if (TEST_DB) {
         return { teardown: () => pool.end() };
       },
       make: async () => {
-        await pool.query('TRUNCATE ocorrencias, usuarios CASCADE');
+        await pool.query('TRUNCATE ocorrencias, usuarios, prioridade_por_bairro CASCADE');
         return {
+          pool,
           users: pgUsers.createUserRepository(pool),
           ocorrencias: pgOcorrencias.createOcorrenciaRepository(pool),
         };
@@ -165,5 +166,69 @@ describe.each(implementacoes)('Repositórios (%s)', (_nome, impl) => {
       expect(await repos.ocorrencias.all()).toEqual([atualizada]);
       expect(await repos.ocorrencias.update('nao-e-uuid', { status: 'x' })).toBeNull();
     });
+  });
+});
+
+// Testes que só fazem sentido no PostgreSQL real.
+(TEST_DB ? describe : describe.skip)('PostgreSQL: migrações, /health e Airflow', () => {
+  const { createIndicadoresRepositoryPg } = require('../src/repositories/indicadoresRepository');
+  const { createContainer } = require('../src/container');
+  let pool;
+
+  beforeAll(async () => {
+    pool = createPool({ url: TEST_DB });
+    await migrate(pool, { logger: { log: () => {} } });
+  });
+  afterAll(() => pool.end());
+
+  it('migrações são idempotentes (rodar de novo não aplica nada)', async () => {
+    expect(await migrate(pool, { logger: { log: () => {} } })).toEqual([]);
+  });
+
+  it('aplica migrações novas e desfaz por inteiro a que falhar', async () => {
+    const fs = require('node:fs');
+    const os = require('node:os');
+    const path = require('node:path');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'migracoes-'));
+    fs.writeFileSync(path.join(dir, '900_ok.sql'), 'CREATE TABLE teste_mig_ok (x int);');
+    fs.writeFileSync(
+      path.join(dir, '901_falha.sql'),
+      'CREATE TABLE teste_mig_falha (x int); SELECT 1/0;',
+    );
+    const silencioso = { logger: { log: () => {} }, dir };
+
+    try {
+      await expect(migrate(pool, silencioso)).rejects.toThrow('Falha na migração 901_falha.sql');
+
+      const existe = async (t) =>
+        (await pool.query('SELECT to_regclass($1) AS t', [t])).rows[0].t !== null;
+      expect(await existe('teste_mig_ok')).toBe(true); //    a boa foi aplicada
+      expect(await existe('teste_mig_falha')).toBe(false); // a ruim foi desfeita inteira
+      const { rows } = await pool.query("SELECT nome FROM schema_migrations WHERE nome LIKE '90%'");
+      expect(rows.map((r) => r.nome)).toEqual(['900_ok.sql']);
+    } finally {
+      await pool.query("DROP TABLE IF EXISTS teste_mig_ok; DELETE FROM schema_migrations WHERE nome LIKE '90%'");
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('checkDatabase responde ok com o banco no ar', async () => {
+    expect(await createContainer({ pool }).checkDatabase()).toBe('ok');
+  });
+
+  it('checkDatabase responde indisponivel sem conexão', async () => {
+    const quebrado = createPool({ url: 'postgres://x:y@127.0.0.1:1/nada' });
+    expect(await createContainer({ pool: quebrado }).checkDatabase()).toBe('indisponivel');
+    await quebrado.end();
+  });
+
+  it('lê a prioridade por bairro gravada pelo Airflow, da maior para a menor', async () => {
+    await pool.query('TRUNCATE prioridade_por_bairro');
+    await pool.query(`INSERT INTO prioridade_por_bairro (bairro, populacao_idosa, ocorrencias, apoios, score_prioridade)
+                      VALUES ('Sé', 5200, 12, 30, 61.5), ('Bela Vista', 8100, 20, 41, 87.25)`);
+    const [primeiro, segundo] = await createIndicadoresRepositoryPg(pool).prioridadeBairros();
+
+    expect(primeiro).toMatchObject({ bairro: 'Bela Vista', scorePrioridade: 87.25, populacaoIdosa: 8100 });
+    expect(segundo.bairro).toBe('Sé');
   });
 });
