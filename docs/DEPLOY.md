@@ -111,6 +111,20 @@ az provider register --namespace Microsoft.KeyVault --wait
 
 Depois, rode o script de novo: ele continua de onde parou.
 
+**`Timeout waiting for token from portal. Audience: https://graph.microsoft.com/`**
+
+O Cloud Shell não conseguiu o token do Microsoft Graph, usado só para criar a identidade OIDC. Não é problema da conta nem do script. Refaça o login e rode o script de novo:
+
+```bash
+az logout
+```
+
+```bash
+az login --scope "https://graph.microsoft.com//.default"
+```
+
+Se continuar falhando, o script termina mesmo assim e avisa: use o **plano B** (seção 5).
+
 **`The resource ... is not available in location` (PostgreSQL ou App Service)**
 
 Algumas assinaturas de estudante bloqueiam certas regiões para certos serviços. Rode de novo com outra região, por exemplo `LOCATION=eastus2` ou `LOCATION=brazilsouth`. Se o Resource Group já foi criado em outra região, não tem problema: os recursos podem ficar em regiões diferentes do grupo.

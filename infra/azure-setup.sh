@@ -42,6 +42,16 @@ passo() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 aviso() { printf '\033[1;33m[aviso] %s\033[0m\n' "$*"; }
 gerar_senha() { echo "$(openssl rand -hex 16)Zz9_"; }   # maiúscula, minúscula, número e símbolo
 
+# Seu ID (object id) no Entra ID, lido do token da própria Azure (claim "oid").
+# Evita depender do Microsoft Graph, cujo token às vezes expira no Cloud Shell
+# ("Timeout waiting for token from portal. Audience: https://graph.microsoft.com/").
+meu_object_id() {
+  local payload
+  payload="$(az account get-access-token --query accessToken -o tsv | cut -d. -f2 | tr '_-' '/+')"
+  while [ $(( ${#payload} % 4 )) -ne 0 ]; do payload="${payload}="; done   # base64url sem padding
+  base64 -d <<<"$payload" 2>/dev/null | jq -r '.oid // empty' 2>/dev/null || true
+}
+
 az config set extension.use_dynamic_install=yes_without_prompt --only-show-errors >/dev/null
 SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
 TENANT_ID="$(az account show --query tenantId -o tsv)"
@@ -81,7 +91,10 @@ if ! az keyvault show -n "$KV_NAME" -o none 2>/dev/null; then
   az keyvault create -n "$KV_NAME" -g "$RG" -l "$LOCATION" --enable-rbac-authorization true -o none
 fi
 KV_ID="$(az keyvault show -n "$KV_NAME" --query id -o tsv)"
-ME="$(az ad signed-in-user show --query id -o tsv)"
+ME="$(meu_object_id)"
+if [ -z "$ME" ]; then
+  ME="$(az ad signed-in-user show --query id -o tsv)"   # último recurso: consulta o Graph
+fi
 az role assignment create --assignee-object-id "$ME" --assignee-principal-type User \
   --role "Key Vault Secrets Officer" --scope "$KV_ID" -o none 2>/dev/null || true
 echo "Aguardando a permissão no Key Vault propagar (30s)..."
@@ -168,14 +181,16 @@ alerta alerta-lentidao "avg HttpResponseTime > 3" 3 \
 
 # ---------- 7. Identidade do GitHub Actions (OIDC) ----------------------------
 passo "7/8 Login do GitHub Actions por OIDC (sem senha)"
-OIDC_OK=true
-CLIENT_ID="$(az ad app list --display-name "$OIDC_APP" --query '[0].appId' -o tsv 2>/dev/null || true)"
-if [ -z "$CLIENT_ID" ]; then
-  CLIENT_ID="$(az ad app create --display-name "$OIDC_APP" --query appId -o tsv 2>/dev/null)" || OIDC_OK=false
-fi
-if $OIDC_OK && [ -n "$CLIENT_ID" ]; then
-  az ad sp show --id "$CLIENT_ID" -o none 2>/dev/null || az ad sp create --id "$CLIENT_ID" -o none
-  SP_ID="$(az ad sp show --id "$CLIENT_ID" --query id -o tsv)"
+# Este passo usa o Microsoft Graph. Se ele falhar (permissão ou token expirado no
+# Cloud Shell), o script NÃO para: segue com o plano B do deploy.
+configurar_oidc() {
+  CLIENT_ID="$(az ad app list --display-name "$OIDC_APP" --query '[0].appId' -o tsv 2>/dev/null || true)"
+  if [ -z "$CLIENT_ID" ]; then
+    CLIENT_ID="$(az ad app create --display-name "$OIDC_APP" --query appId -o tsv 2>/dev/null)" || return 1
+  fi
+  [ -n "$CLIENT_ID" ] || return 1
+  az ad sp show --id "$CLIENT_ID" -o none 2>/dev/null || az ad sp create --id "$CLIENT_ID" -o none || return 1
+  SP_ID="$(az ad sp show --id "$CLIENT_ID" --query id -o tsv)" || return 1
   CRED_FILE="$(mktemp)"
   cat > "$CRED_FILE" <<JSON
 {
@@ -191,10 +206,14 @@ JSON
   # Menor privilégio: só pode publicar NESTE App Service, nada além disso.
   az role assignment create --assignee-object-id "$SP_ID" --assignee-principal-type ServicePrincipal \
     --role "Website Contributor" --scope "$WEBAPP_ID" -o none 2>/dev/null || true
-else
+}
+
+OIDC_OK=true
+if ! configurar_oidc; then
   OIDC_OK=false
-  aviso "Sua conta não pode criar registros de aplicativo no Entra ID (comum em contas institucionais)."
-  aviso "Use o plano B do deploy (publish profile). Veja docs/DEPLOY.md, seção 'Plano B'."
+  aviso "Não foi possível criar a identidade OIDC no Entra ID (sem permissão ou token do Graph expirado)."
+  aviso "Opções: rode 'az login --scope https://graph.microsoft.com//.default' e execute o script de novo,"
+  aviso "ou use o plano B do deploy (publish profile). Veja docs/DEPLOY.md."
 fi
 
 # ---------- 8. Resumo ---------------------------------------------------------
