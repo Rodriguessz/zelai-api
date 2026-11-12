@@ -67,7 +67,7 @@ jobs:
           '.env*' 'docker-compose.yml' 'eslint.config.js' 'jest.config.js' 'redocly.yaml'
 
       - name: Publicar artefato
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: app
           path: app.zip
