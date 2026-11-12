@@ -1,4 +1,5 @@
 const HttpError = require('../utils/httpError');
+const telemetry = require('../telemetry');
 const { ROLES } = require('../domain/roles');
 const { STATUS, validarTransicao } = require('../domain/ocorrencia');
 
@@ -42,6 +43,12 @@ function createOcorrenciaService({ ocorrenciaRepository, triagemService }) {
         protocolo156: null,
         historico: [{ status: STATUS.AGUARDANDO_APROVACAO, porPapel: user.papel, em: new Date().toISOString() }],
       });
+      telemetry.trackEvent('OcorrenciaCriada', {
+        categoria,
+        bairro: endereco.bairro,
+        urgencia: triagem.urgencia,
+        fonteTriagem: triagem.fonte,
+      });
       return toPublic(ocorrencia, user);
     },
 
@@ -75,6 +82,12 @@ function createOcorrenciaService({ ocorrenciaRepository, triagemService }) {
         ]);
       }
 
+      telemetry.trackEvent('OcorrenciaStatusAlterado', {
+        de: ocorrencia.status,
+        para: status,
+        papel: user.papel,
+        categoria: ocorrencia.categoria,
+      });
       const atualizada = await ocorrenciaRepository.update(id, {
         status,
         ...(protocolo156 && { protocolo156 }),
