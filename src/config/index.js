@@ -19,6 +19,11 @@ module.exports = {
   env,
   port: Number(process.env.PORT) || 3000,
   version,
+  // Sem DATABASE_URL a API usa armazenamento em memória (desenvolvimento e testes).
+  database: {
+    url: process.env.DATABASE_URL || null,
+    ssl: process.env.DATABASE_SSL === 'true',
+  },
   // Serviços das outras disciplinas. Sem URL configurada, a API usa o plano B.
   genai: {
     url: process.env.GENAI_URL || null,

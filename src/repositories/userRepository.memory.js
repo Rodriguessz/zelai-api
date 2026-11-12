@@ -14,6 +14,7 @@ function createUserRepository() {
         email: email.toLowerCase(),
         senhaHash,
         papel,
+        endereco: null,
         criadoEm: new Date().toISOString(),
       };
       users.set(user.id, user);

@@ -36,6 +36,10 @@ function createOcorrenciaRepository() {
       return { items: filtradas.slice(inicio, inicio + limit).map(clone), total: filtradas.length };
     },
 
+    async all() {
+      return [...ocorrencias.values()].map(clone);
+    },
+
     async update(id, changes) {
       const atual = ocorrencias.get(id);
       if (!atual) return null;
