@@ -1,17 +1,26 @@
 const { Router } = require('express');
 const config = require('../config');
 
-const router = Router();
-
 // Usado pelo Health Check do App Service, pelo smoke test do pipeline
 // e pelo teste de disponibilidade do Application Insights.
-router.get('/', (_req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    version: config.version,
-    uptime: Math.round(process.uptime()),
-    timestamp: new Date().toISOString(),
-  });
-});
+// Responde 503 se o banco estiver fora do ar: a Azure tira a instância do balanceamento
+// e o alerta de indisponibilidade dispara.
+function createHealthRouter({ checkDatabase }) {
+  const router = Router();
 
-module.exports = router;
+  router.get('/', async (_req, res) => {
+    const database = await checkDatabase();
+    const ok = database !== 'indisponivel';
+    res.status(ok ? 200 : 503).json({
+      status: ok ? 'ok' : 'degradado',
+      version: config.version,
+      uptime: Math.round(process.uptime()),
+      timestamp: new Date().toISOString(),
+      checks: { database },
+    });
+  });
+
+  return router;
+}
+
+module.exports = { createHealthRouter };

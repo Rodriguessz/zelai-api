@@ -2,20 +2,36 @@ const config = require('./config');
 const { createContainer } = require('./container');
 const { createApp } = require('./app');
 const { seedUsers } = require('./bootstrap/seedUsers');
+const { createPool } = require('./db/pool');
+const { migrate } = require('./db/migrate');
 
 async function main() {
-  const container = createContainer();
+  let pool;
+  if (config.database.url) {
+    pool = createPool(config.database);
+    await migrate(pool);
+  } else if (config.env === 'production') {
+    console.warn('ATENÇÃO: DATABASE_URL não definida. Os dados ficarão só em memória.');
+  }
+
+  const container = createContainer({ pool });
   const seeded = await seedUsers(container.authService);
-  if (seeded.length) console.log(`Contas de serviço criadas: ${seeded.join(', ')}`);
+  if (seeded.length) console.log(`Contas de serviço prontas: ${seeded.join(', ')}`);
 
   const app = createApp(container);
   const server = app.listen(config.port, () => {
-    console.log(`ZelaAí API v${config.version} ouvindo na porta ${config.port} (${config.env})`);
+    console.log(
+      `ZelaAí API v${config.version} ouvindo na porta ${config.port} ` +
+        `(${config.env}, banco: ${pool ? 'PostgreSQL' : 'memória'})`,
+    );
   });
 
   // Encerramento gracioso: o App Service envia SIGTERM ao reiniciar/trocar versão.
   process.on('SIGTERM', () => {
-    server.close(() => process.exit(0));
+    server.close(async () => {
+      await pool?.end();
+      process.exit(0);
+    });
   });
 }
 
