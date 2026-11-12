@@ -2,24 +2,26 @@ const HttpError = require('../utils/httpError');
 const { ROLES } = require('../domain/roles');
 const { STATUS, validarTransicao } = require('../domain/ocorrencia');
 
-// Formato devolvido pela API: a lista de quem apoiou vira só um número
-// (não expomos quais cidadãos apoiaram — LGPD).
-function toPublic({ apoiadores, ...ocorrencia }, user) {
+// Formato devolvido pela API (LGPD / minimização de dados):
+// - a lista de quem apoiou vira só um número;
+// - um cidadão não vê quem registrou a ocorrência de outra pessoa.
+function toPublic({ apoiadores, cidadaoId, ...ocorrencia }, user) {
+  const podeVerAutor = user.papel !== ROLES.CIDADAO || cidadaoId === user.id;
   return {
     ...ocorrencia,
+    ...(podeVerAutor && { cidadaoId }),
+    minha: cidadaoId === user.id,
     apoios: apoiadores.length,
     apoiadaPorMim: apoiadores.includes(user.id),
   };
 }
 
 function createOcorrenciaService({ ocorrenciaRepository }) {
-  // Cidadão só enxerga as próprias ocorrências; gestor e robô enxergam todas.
-  // Para quem não pode ver, respondemos 404 (e não 403) para não revelar que o id existe.
-  async function findVisible(user, id) {
+  // Problemas do espaço público são visíveis a todos os usuários autenticados
+  // (é o que permite apoiar a ocorrência de outra pessoa).
+  async function findOrFail(id) {
     const ocorrencia = await ocorrenciaRepository.findById(id);
-    const podeVer =
-      ocorrencia && (user.papel !== ROLES.CIDADAO || ocorrencia.cidadaoId === user.id);
-    if (!podeVer) throw HttpError.notFound('Ocorrência não encontrada');
+    if (!ocorrencia) throw HttpError.notFound('Ocorrência não encontrada');
     return ocorrencia;
   }
 
@@ -40,8 +42,9 @@ function createOcorrenciaService({ ocorrenciaRepository }) {
       return toPublic(ocorrencia, user);
     },
 
-    async list(user, { page, limit, ...filtros }) {
-      const cidadaoId = user.papel === ROLES.CIDADAO ? user.id : undefined;
+    // ?minhas=true filtra só as ocorrências do usuário logado.
+    async list(user, { page, limit, minhas, ...filtros }) {
+      const cidadaoId = minhas ? user.id : undefined;
       const { items, total } = await ocorrenciaRepository.list({ ...filtros, cidadaoId, page, limit });
       return {
         items: items.map((o) => toPublic(o, user)),
@@ -53,11 +56,11 @@ function createOcorrenciaService({ ocorrenciaRepository }) {
     },
 
     async get(user, id) {
-      return toPublic(await findVisible(user, id), user);
+      return toPublic(await findOrFail(id), user);
     },
 
     async changeStatus(user, id, { status, observacao, protocolo156 }) {
-      const ocorrencia = await findVisible(user, id);
+      const ocorrencia = await findOrFail(id);
 
       const erro = validarTransicao(ocorrencia.status, status, user.papel);
       if (erro?.status === 403) throw HttpError.forbidden(erro.motivo);
@@ -82,8 +85,7 @@ function createOcorrenciaService({ ocorrenciaRepository }) {
 
     // "Apoiar" = dizer "isso também me afeta". Ajuda a priorizar. Um apoio por pessoa.
     async apoiar(user, id) {
-      const ocorrencia = await ocorrenciaRepository.findById(id);
-      if (!ocorrencia) throw HttpError.notFound('Ocorrência não encontrada');
+      const ocorrencia = await findOrFail(id);
       if (ocorrencia.apoiadores.includes(user.id)) {
         throw HttpError.conflict('Você já apoiou esta ocorrência');
       }
