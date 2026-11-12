@@ -14,6 +14,7 @@ function createHealthRouter({ checkDatabase }) {
     res.status(ok ? 200 : 503).json({
       status: ok ? 'ok' : 'degradado',
       version: config.version,
+      commit: config.build.commit, // o smoke test do CD confere se é o commit recém-publicado
       uptime: Math.round(process.uptime()),
       timestamp: new Date().toISOString(),
       checks: { database },

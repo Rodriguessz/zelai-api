@@ -353,6 +353,7 @@ components:
       properties:
         status: { type: string, enum: [ok, degradado] }
         version: { type: string, example: 0.1.0 }
+        commit: { type: string, description: Commit publicado (gerado pelo CD), example: 9dba420 }
         uptime: { type: integer, example: 120 }
         timestamp: { type: string, format: date-time }
         checks:

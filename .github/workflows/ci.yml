@@ -8,14 +8,23 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # Também é chamado pelo CD antes de cada deploy (mesmo código que vai para produção).
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit a testar
+        type: string
+        required: false
 
 # Menor privilégio: o workflow só lê o código.
 permissions:
   contents: read
 
 # Se um novo commit chegar no mesmo PR, cancela a execução antiga.
+# O nome do workflow entra no grupo: quando o CD chama este CI, ele não
+# cancela (nem é cancelado por) o CI disparado pelo mesmo push na main.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -43,6 +52,8 @@ jobs:
     steps:
       - name: Baixar código
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Configurar Node.js (versão do .nvmrc)
         uses: actions/setup-node@v6
@@ -58,6 +69,9 @@ jobs:
 
       - name: Validar contrato OpenAPI
         run: npm run lint:openapi
+
+      - name: Validar scripts de infraestrutura (shellcheck)
+        run: shellcheck infra/*.sh scripts/*.sh
 
       - name: Testes com cobertura (mínimo 70%)
         run: npm run test:coverage
@@ -80,6 +94,8 @@ jobs:
     steps:
       - name: Baixar código
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Configurar Node.js (versão do .nvmrc)
         uses: actions/setup-node@v6

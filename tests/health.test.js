@@ -11,6 +11,7 @@ describe('GET /health', () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('ok');
     expect(res.body.version).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(res.body.commit).toBe('local'); // sem build-info.json, fora do pipeline
     expect(typeof res.body.uptime).toBe('number');
     expect(new Date(res.body.timestamp).toString()).not.toBe('Invalid Date');
   });
