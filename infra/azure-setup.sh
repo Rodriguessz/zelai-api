@@ -48,6 +48,21 @@ TENANT_ID="$(az account show --query tenantId -o tsv)"
 echo "Assinatura: $(az account show --query name -o tsv) ($SUBSCRIPTION_ID)"
 echo "Região: $LOCATION · Resource Group: $RG · App: $APP_NAME"
 
+# ---------- 0. Provedores de recursos ----------------------------------------
+# Assinaturas novas (ex.: Azure for Students) vêm com poucos provedores ativos.
+# Sem registrar, a CLI falha com "MissingSubscriptionRegistration".
+passo "0/8 Registrando provedores de recursos (só demora na primeira vez)"
+for ns in Microsoft.Web Microsoft.DBforPostgreSQL Microsoft.KeyVault \
+          Microsoft.OperationalInsights Microsoft.Insights; do
+  estado="$(az provider show --namespace "$ns" --query registrationState -o tsv 2>/dev/null || echo NotRegistered)"
+  if [ "$estado" = "Registered" ]; then
+    echo "  $ns: já registrado"
+  else
+    echo "  $ns: registrando..."
+    az provider register --namespace "$ns" --wait -o none
+  fi
+done
+
 # ---------- 1. Resource Group ------------------------------------------------
 passo "1/8 Resource Group"
 az group create -n "$RG" -l "$LOCATION" --tags projeto=zelai disciplina=devops -o none
