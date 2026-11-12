@@ -3,6 +3,16 @@
 const crypto = require('node:crypto');
 const { version } = require('../../package.json');
 
+// build-info.json é gerado pelo pipeline de CD com o commit que foi publicado.
+// Localmente ele não existe, e o commit fica como 'local'.
+function buildInfo() {
+  try {
+    return require('../../build-info.json');
+  } catch {
+    return { commit: process.env.GIT_COMMIT_SHA || 'local', builtAt: null };
+  }
+}
+
 const env = process.env.NODE_ENV || 'development';
 
 function jwtSecret() {
@@ -19,6 +29,7 @@ module.exports = {
   env,
   port: Number(process.env.PORT) || 3000,
   version,
+  build: buildInfo(),
   // Origens (front-end) autorizadas a chamar a API pelo navegador, separadas por vírgula.
   // Ex.: https://zelai-front.azurewebsites.net,http://localhost:5173
   corsOrigins: (process.env.CORS_ORIGINS || '')
