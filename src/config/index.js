@@ -19,6 +19,18 @@ module.exports = {
   env,
   port: Number(process.env.PORT) || 3000,
   version,
+  // Origens (front-end) autorizadas a chamar a API pelo navegador, separadas por vírgula.
+  // Ex.: https://zelai-front.azurewebsites.net,http://localhost:5173
+  corsOrigins: (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean),
+  // Limite de requisições por IP (janela de 15 minutos).
+  rateLimit: {
+    windowMs: 15 * 60 * 1000,
+    max: Number(process.env.RATE_LIMIT_MAX) || 300, //          geral
+    authMax: Number(process.env.RATE_LIMIT_AUTH_MAX) || 10, //  login e cadastro
+  },
   // Sem DATABASE_URL a API usa armazenamento em memória (desenvolvimento e testes).
   database: {
     url: process.env.DATABASE_URL || null,
