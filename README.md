@@ -1,6 +1,7 @@
 # ZelaAí · API
 
 [![CI](https://github.com/Rodriguessz/zelai-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Rodriguessz/zelai-api/actions/workflows/ci.yml)
+[![CD](https://github.com/Rodriguessz/zelai-api/actions/workflows/cd.yml/badge.svg)](https://github.com/Rodriguessz/zelai-api/actions/workflows/cd.yml)
 
 API Node.js do **ZelaAí**, plataforma de zeladoria urbana acessível desenvolvida para a Global Solution 2026.2 (CitizenTech · FIAP).
 
@@ -48,10 +49,22 @@ Todo Pull Request para a `main` passa automaticamente por dois jobs no GitHub Ac
 
 | Job | O que verifica | Bloqueia o merge se… |
 |---|---|---|
-| **Lint e testes** | ESLint + contrato OpenAPI + Jest com cobertura | houver erro de lint, contrato inválido, teste falhando ou cobertura < 70% |
+| **Lint e testes** | ESLint + contrato OpenAPI + shellcheck + Jest (com PostgreSQL 16) | houver erro de lint, contrato ou script inválido, teste falhando ou cobertura < 70% |
 | **Auditoria de dependências** | `npm audit` | alguma dependência de produção tiver vulnerabilidade alta ou crítica |
 
 O Dependabot ([`.github/dependabot.yml`](.github/dependabot.yml)) abre PRs semanais para atualizar dependências npm e versões das actions.
+
+## Entrega contínua (CD) na Azure
+
+A cada merge na `main`, o workflow [`.github/workflows/cd.yml`](.github/workflows/cd.yml) publica a API no **Azure App Service**:
+
+```
+CI de novo → build do pacote → login OIDC (sem senha) → deploy → smoke test (/health com o commit novo)
+```
+
+- **Infraestrutura como código:** [`infra/azure-setup.sh`](infra/azure-setup.sh) cria App Service, PostgreSQL, Key Vault, Application Insights e alertas.
+- **Rollback:** Actions → CD → *Run workflow* → informe o commit anterior.
+- 📘 Passo a passo, custos e evidências: **[docs/DEPLOY.md](docs/DEPLOY.md)**.
 
 ## Segurança
 
@@ -170,6 +183,9 @@ src/
 ├── utils/            # utilitários (HttpError)
 └── container.js      # monta as dependências da aplicação
 tests/                # testes automatizados
+infra/                # infraestrutura na Azure (az CLI)
+scripts/              # smoke test pós-deploy
+docs/                 # guia de deploy
 db/migrations/        # migrações SQL versionadas
 ```
 
