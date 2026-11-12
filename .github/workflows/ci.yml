@@ -1,0 +1,73 @@
+name: CI
+
+# Roda em todo PR para a main (barra código quebrado antes do merge)
+# e em todo push na main (mantém o status da main visível).
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Menor privilégio: o workflow só lê o código.
+permissions:
+  contents: read
+
+# Se um novo commit chegar no mesmo PR, cancela a execução antiga.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    name: Lint e testes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v6
+
+      - name: Configurar Node.js (versão do .nvmrc)
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Instalar dependências (exatamente as do package-lock)
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Testes com cobertura (mínimo 70%)
+        run: npm run test:coverage
+
+      - name: Publicar relatório de cobertura
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
+
+  security-audit:
+    name: Auditoria de dependências
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v6
+
+      - name: Configurar Node.js (versão do .nvmrc)
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # Falha se alguma dependência de produção tiver vulnerabilidade alta ou crítica.
+      - name: npm audit (produção)
+        run: npm audit --omit=dev --audit-level=high
+
+      # Só informa sobre dependências de desenvolvimento, sem bloquear.
+      - name: npm audit (desenvolvimento, informativo)
+        run: npm audit --audit-level=high || echo "::warning::Há vulnerabilidades em dependências de desenvolvimento"
