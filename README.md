@@ -6,6 +6,12 @@ API Node.js do **ZelaAí**, plataforma de zeladoria urbana acessível desenvolvi
 
 > A Ficha Técnica do MVP será adicionada ao final do projeto.
 
+## Arquitetura
+
+![Arquitetura de produção do ZelaAí na Azure](docs/arquitetura.drawio.svg)
+
+> O arquivo [`docs/arquitetura.drawio.svg`](docs/arquitetura.drawio.svg) é editável: abra-o no [draw.io](https://app.diagrams.net) para alterar o diagrama.
+
 ## Stack
 
 - Node.js 22 (LTS) + Express 5
