@@ -45,6 +45,40 @@ Todo Pull Request para a `main` passa automaticamente por dois jobs no GitHub Ac
 
 O Dependabot ([`.github/dependabot.yml`](.github/dependabot.yml)) abre PRs semanais para atualizar dependências npm e versões das actions.
 
+## Integrações com as outras disciplinas
+
+A API conversa com os serviços de **Visão Computacional** e **GenAI** por HTTP, com timeout. Se um serviço não estiver configurado, demorar ou falhar, a API **continua funcionando** com um plano B.
+
+| Serviço | Variáveis | Quando é chamado | Plano B |
+|---|---|---|---|
+| **GenAI** (triagem) | `GENAI_URL`, `GENAI_API_KEY`, `GENAI_TIMEOUT_MS` | ao criar uma ocorrência | triagem por regras (palavras-chave + categoria) |
+| **Visão** (OCR) | `VISAO_URL`, `VISAO_API_KEY`, `VISAO_TIMEOUT_MS` | `POST /enderecos/extracao` | orienta o cidadão a preencher manualmente |
+
+Toda ocorrência guarda em `triagem.fonte` se a classificação veio da IA (`ia`) ou das regras (`regras`), com a explicação do motivo. A decisão final é sempre do **gestor** (pessoa no circuito).
+
+### Contratos que os serviços devem implementar
+
+**GenAI**: `POST {GENAI_URL}/triagem` (header `x-api-key`, se configurado)
+
+```json
+// requisição
+{ "descricao": "Semáforo quebrado, idosos não conseguem atravessar", "categoria": "semaforo" }
+// resposta
+{ "urgencia": "alta", "categoriaSugerida": "semaforo",
+  "resumo": "Semáforo de pedestres sem funcionar",
+  "explicacao": "Risco de atropelamento para pessoas com mobilidade reduzida" }
+```
+
+**Visão**: `POST {VISAO_URL}/extrair-endereco` (multipart, campo `imagem`)
+
+```json
+// resposta
+{ "empresa": "Sabesp", "confianca": 0.93,
+  "endereco": { "logradouro": "Rua A", "numero": "10", "bairro": "Sé", "cep": "01001-000", "cidade": "São Paulo" } }
+```
+
+Respostas fora desse formato são descartadas e a API usa o plano B.
+
 ## Estrutura
 
 ```
@@ -52,13 +86,14 @@ src/
 ├── app.js            # cria a aplicação Express (sem abrir porta)
 ├── server.js         # sobe o servidor HTTP
 ├── config/           # leitura de variáveis de ambiente
-├── routes/           # rotas da API (/health, /auth, /ocorrencias, /docs)
+├── routes/           # rotas da API (/health, /auth, /ocorrencias, /enderecos, /docs)
 ├── docs/             # contrato OpenAPI 3.1
 ├── middlewares/      # autenticação, RBAC, validação, 404 e erros
 ├── services/         # regras de negócio (ex.: authService)
 ├── repositories/     # acesso a dados (em memória por enquanto)
 ├── domain/           # regras do domínio (papéis, ciclo de vida da ocorrência)
 ├── bootstrap/        # rotinas de inicialização (contas de serviço)
+├── integrations/     # clientes de GenAI e Visão + triagem por regras (plano B)
 ├── utils/            # utilitários (HttpError)
 └── container.js      # monta as dependências da aplicação
 tests/                # testes automatizados
@@ -77,6 +112,8 @@ tests/                # testes automatizados
 | GET | `/ocorrencias/:id` | autenticado | Detalha uma ocorrência |
 | PATCH | `/ocorrencias/:id/status` | gestor, robô | Muda o status seguindo o ciclo de vida |
 | POST | `/ocorrencias/:id/apoios` | cidadão | Apoia uma ocorrência ("isso também me afeta") |
+| POST | `/enderecos/extracao` | cidadão | Lê a foto do comprovante (Visão) e **sugere** o endereço |
+| PUT | `/enderecos/meu` | cidadão | Confirma/corrige o endereço (salva só bairro, CEP e cidade) |
 | GET | `/docs` | público | Documentação interativa (Swagger UI) |
 | GET | `/openapi.json` | público | Contrato OpenAPI 3.1 |
 
