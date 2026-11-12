@@ -11,6 +11,7 @@ module.exports = (err, _req, res, _next) => {
   res.status(status).json({
     error: err.name && !isServerError ? err.name : 'InternalServerError',
     message: isServerError ? 'Erro interno no servidor' : err.message,
+    ...(!isServerError && err.details && { details: err.details }),
     ...(config.env !== 'production' && isServerError && { detail: err.message }),
   });
 };
