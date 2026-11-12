@@ -22,6 +22,8 @@ tags:
     description: Problemas do espaço público registrados pelos cidadãos
   - name: Endereço
     description: Leitura do comprovante por Visão Computacional e confirmação pelo cidadão
+  - name: Indicadores
+    description: Indicadores de impacto para o gestor e o pitch
 
 paths:
   /health:
@@ -33,15 +35,10 @@ paths:
       responses:
         '200':
           description: API no ar
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status: { type: string, example: ok }
-                  version: { type: string, example: 0.1.0 }
-                  uptime: { type: integer, example: 120 }
-                  timestamp: { type: string, format: date-time }
+          content: { application/json: { schema: { $ref: '#/components/schemas/Health' } } }
+        '503':
+          description: API no ar, mas o banco de dados está indisponível
+          content: { application/json: { schema: { $ref: '#/components/schemas/Health' } } }
 
   /auth/register:
     post:
@@ -287,6 +284,54 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
 
+  /indicadores:
+    get:
+      tags: [Indicadores]
+      operationId: obterIndicadores
+      summary: Indicadores de impacto (gestor)
+      responses:
+        '200':
+          description: Indicadores consolidados
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  geradoEm: { type: string, format: date-time }
+                  total: { type: integer, example: 42 }
+                  porStatus: { type: object, additionalProperties: { type: integer } }
+                  porCategoria: { type: object, additionalProperties: { type: integer } }
+                  porUrgencia: { type: object, additionalProperties: { type: integer } }
+                  triagemPorFonte:
+                    type: object
+                    properties:
+                      ia: { type: integer }
+                      regras: { type: integer }
+                  percentualResolvidas: { type: number, example: 35.7 }
+                  tempoMedioAteProtocoloHoras: { type: [number, 'null'], example: 6.5 }
+                  bairrosMaisAfetados:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        bairro: { type: string }
+                        ocorrencias: { type: integer }
+                        apoios: { type: integer }
+                  prioridadeBairros:
+                    type: array
+                    description: Calculada pelo pipeline do Airflow (tabela prioridade_por_bairro)
+                    items:
+                      type: object
+                      properties:
+                        bairro: { type: string }
+                        populacaoIdosa: { type: [integer, 'null'] }
+                        ocorrencias: { type: integer }
+                        apoios: { type: integer }
+                        scorePrioridade: { type: number }
+                        atualizadoEm: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -299,6 +344,18 @@ components:
       schema: { type: string, format: uuid }
 
   schemas:
+    Health:
+      type: object
+      properties:
+        status: { type: string, enum: [ok, degradado] }
+        version: { type: string, example: 0.1.0 }
+        uptime: { type: integer, example: 120 }
+        timestamp: { type: string, format: date-time }
+        checks:
+          type: object
+          properties:
+            database: { type: string, enum: [ok, indisponivel, memoria] }
+
     Papel: { type: string, enum: [cidadao, gestor, robo] }
     Categoria:
       type: string

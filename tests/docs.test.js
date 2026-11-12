@@ -23,6 +23,7 @@ describe('Documentação OpenAPI', () => {
         '/ocorrencias/{id}/apoios',
         '/enderecos/extracao',
         '/enderecos/meu',
+        '/indicadores',
       ]),
     );
   });

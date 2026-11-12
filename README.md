@@ -18,7 +18,15 @@ API Node.js do **ZelaAí**, plataforma de zeladoria urbana acessível desenvolvi
 nvm use            # usa o Node 22 definido em .nvmrc
 npm ci             # instala dependências exatamente como no package-lock
 cp .env.example .env
-npm run dev        # sobe a API com reload automático
+npm run dev        # sobe a API com reload automático (dados em memória)
+```
+
+Para usar **PostgreSQL** localmente (precisa do Docker):
+
+```bash
+docker compose up -d   # sobe o PostgreSQL 16 em localhost:5432
+# no .env: DATABASE_URL=postgres://zelai:zelai@localhost:5432/zelai
+npm run dev            # as migrações rodam sozinhas na inicialização
 ```
 
 Teste: <http://localhost:3000/health>
@@ -44,6 +52,31 @@ Todo Pull Request para a `main` passa automaticamente por dois jobs no GitHub Ac
 | **Auditoria de dependências** | `npm audit` | alguma dependência de produção tiver vulnerabilidade alta ou crítica |
 
 O Dependabot ([`.github/dependabot.yml`](.github/dependabot.yml)) abre PRs semanais para atualizar dependências npm e versões das actions.
+
+## Banco de dados
+
+| Sem `DATABASE_URL` | Com `DATABASE_URL` |
+|---|---|
+| dados em memória (somem ao reiniciar) | PostgreSQL (Azure Database for PostgreSQL em produção) |
+| usado em desenvolvimento rápido e testes | migrações de `db/migrations/` rodam sozinhas na inicialização |
+
+- **Migrações versionadas**: cada arquivo `.sql` roda uma única vez, em ordem e dentro de uma transação. Se falhar, nada é aplicado.
+- **Mesma interface** para os repositórios em memória e PostgreSQL. Os **testes de contrato** rodam a mesma suíte contra os dois; na CI, contra um PostgreSQL 16 real.
+- **`/health`** verifica o banco: responde `503` se ele cair, o que dispara o alerta de indisponibilidade.
+- Na Azure use `DATABASE_SSL=true` (conexão com TLS).
+
+### Tabela do Airflow (disciplina Big Data)
+
+O pipeline do Airflow grava a prioridade de cada bairro na tabela `prioridade_por_bairro`, criada pela migração `002`. A API só lê essa tabela e a expõe em `GET /indicadores` (`prioridadeBairros`).
+
+| Coluna | Tipo | Descrição |
+|---|---|---|
+| `bairro` | `TEXT` (PK) | Nome do bairro |
+| `populacao_idosa` | `INTEGER` | Dado do IBGE |
+| `ocorrencias` | `INTEGER` | Ocorrências no bairro |
+| `apoios` | `INTEGER` | Apoios recebidos |
+| `score_prioridade` | `NUMERIC(6,2)` | Quanto maior, mais prioritário |
+| `atualizado_em` | `TIMESTAMPTZ` | Última execução do pipeline |
 
 ## Integrações com as outras disciplinas
 
@@ -86,17 +119,19 @@ src/
 ├── app.js            # cria a aplicação Express (sem abrir porta)
 ├── server.js         # sobe o servidor HTTP
 ├── config/           # leitura de variáveis de ambiente
-├── routes/           # rotas da API (/health, /auth, /ocorrencias, /enderecos, /docs)
+├── routes/           # rotas da API (/health, /auth, /ocorrencias, /enderecos, /indicadores, /docs)
 ├── docs/             # contrato OpenAPI 3.1
 ├── middlewares/      # autenticação, RBAC, validação, 404 e erros
 ├── services/         # regras de negócio (ex.: authService)
-├── repositories/     # acesso a dados (em memória por enquanto)
+├── repositories/     # acesso a dados (memória e PostgreSQL, mesma interface)
 ├── domain/           # regras do domínio (papéis, ciclo de vida da ocorrência)
 ├── bootstrap/        # rotinas de inicialização (contas de serviço)
 ├── integrations/     # clientes de GenAI e Visão + triagem por regras (plano B)
+├── db/               # pool de conexões e migrador
 ├── utils/            # utilitários (HttpError)
 └── container.js      # monta as dependências da aplicação
 tests/                # testes automatizados
+db/migrations/        # migrações SQL versionadas
 ```
 
 ## Endpoints
@@ -114,6 +149,7 @@ tests/                # testes automatizados
 | POST | `/ocorrencias/:id/apoios` | cidadão | Apoia uma ocorrência ("isso também me afeta") |
 | POST | `/enderecos/extracao` | cidadão | Lê a foto do comprovante (Visão) e **sugere** o endereço |
 | PUT | `/enderecos/meu` | cidadão | Confirma/corrige o endereço (salva só bairro, CEP e cidade) |
+| GET | `/indicadores` | gestor | Indicadores de impacto (status, categorias, tempo até o protocolo, bairros) |
 | GET | `/docs` | público | Documentação interativa (Swagger UI) |
 | GET | `/openapi.json` | público | Contrato OpenAPI 3.1 |
 
