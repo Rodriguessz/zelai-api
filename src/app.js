@@ -6,6 +6,13 @@ const { createOcorrenciasRouter } = require('./routes/ocorrencias');
 const { createDocsRouter } = require('./routes/docs');
 const { createEnderecosRouter } = require('./routes/enderecos');
 const { createIndicadoresRouter } = require('./routes/indicadores');
+const {
+  securityHeaders,
+  corsPolicy,
+  generalLimiter,
+  authLimiter,
+  requestId,
+} = require('./middlewares/security');
 const notFound = require('./middlewares/notFound');
 const errorHandler = require('./middlewares/errorHandler');
 
@@ -15,9 +22,18 @@ function createApp(container = createContainer()) {
   const app = express();
 
   app.disable('x-powered-by'); // não expõe a tecnologia do servidor
+  // No App Service a requisição chega por um proxy: o IP real vem em X-Forwarded-For.
+  app.set('trust proxy', 1);
+
+  app.use(requestId());
+  app.use(securityHeaders());
+  app.use(corsPolicy());
   app.use(express.json({ limit: '100kb' }));
 
+  // /health fica fora do rate limit: é chamado o tempo todo pela Azure.
   app.use('/health', createHealthRouter(container));
+  app.use(generalLimiter());
+  app.use(['/auth/login', '/auth/register'], authLimiter());
   app.use(createDocsRouter()); // GET /docs (Swagger UI) e GET /openapi.json
   app.use('/auth', createAuthRouter(container));
   app.use('/ocorrencias', createOcorrenciasRouter(container));

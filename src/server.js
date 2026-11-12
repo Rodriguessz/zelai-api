@@ -1,3 +1,7 @@
+// Telemetria primeiro: o Application Insights precisa instrumentar express e pg ao carregar.
+const { initTelemetry } = require('./telemetry');
+const telemetriaAtiva = initTelemetry();
+
 const config = require('./config');
 const { createContainer } = require('./container');
 const { createApp } = require('./app');
@@ -22,7 +26,8 @@ async function main() {
   const server = app.listen(config.port, () => {
     console.log(
       `ZelaAí API v${config.version} ouvindo na porta ${config.port} ` +
-        `(${config.env}, banco: ${pool ? 'PostgreSQL' : 'memória'})`,
+        `(${config.env}, banco: ${pool ? 'PostgreSQL' : 'memória'}, ` +
+        `telemetria: ${telemetriaAtiva ? 'Application Insights' : 'desligada'})`,
     );
   });
 

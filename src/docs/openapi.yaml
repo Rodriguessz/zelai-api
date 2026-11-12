@@ -10,6 +10,8 @@ info:
 
     **Como usar:** faça login em `POST /auth/login`, copie o `token` e clique em **Authorize** (cadeado) para testar as rotas protegidas.
 
+    **Segurança:** HTTPS, cabeçalhos de segurança (helmet), CORS restrito ao front-end, limite de requisições por IP e header `X-Request-Id` em toda resposta.
+
     **Papéis:** `cidadao` registra e apoia ocorrências · `gestor` aprova, rejeita e resolve · `robo` (UiPath) protocola no Portal 156.
 servers:
   - url: /
@@ -63,6 +65,7 @@ paths:
           content: { application/json: { schema: { $ref: '#/components/schemas/Usuario' } } }
         '400': { $ref: '#/components/responses/ValidationError' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /auth/login:
     post:
@@ -94,6 +97,7 @@ paths:
                   usuario: { $ref: '#/components/schemas/Usuario' }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
 
   /auth/me:
     get:
@@ -449,6 +453,9 @@ components:
       properties:
         error: { type: string }
         message: { type: string }
+        requestId:
+          type: string
+          description: Só em erros 500; o mesmo valor do header X-Request-Id
         details:
           type: array
           items:
@@ -472,6 +479,9 @@ components:
       content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
     Conflict:
       description: Conflito com o estado atual (duplicado ou transição inválida)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    TooManyRequests:
+      description: Limite de tentativas excedido (10 a cada 15 minutos em login e cadastro)
       content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
 
 security:

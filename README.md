@@ -53,6 +53,44 @@ Todo Pull Request para a `main` passa automaticamente por dois jobs no GitHub Ac
 
 O Dependabot ([`.github/dependabot.yml`](.github/dependabot.yml)) abre PRs semanais para atualizar dependências npm e versões das actions.
 
+## Segurança
+
+| Camada | O que a API faz |
+|---|---|
+| **Transporte** | HTTPS Only no App Service + HSTS |
+| **Cabeçalhos** | `helmet`: CSP, `X-Content-Type-Options`, `frame-ancestors 'none'` |
+| **Navegador** | CORS liberado só para as origens de `CORS_ORIGINS` (o front-end) |
+| **Força bruta** | 10 tentativas / 15 min por IP em login e cadastro; 300 / 15 min no geral |
+| **Autenticação** | JWT (1h) + bcrypt + papéis (RBAC) |
+| **Entradas** | validação com Zod, corpo JSON até 100 KB, imagens até 5 MB |
+| **Dados (LGPD)** | hash de senha nunca sai da API; endereço só com bairro, CEP e cidade; imagem do comprovante não é salva |
+| **Segredos** | só em variáveis de ambiente / Key Vault; `JWT_SECRET` obrigatório em produção |
+| **Dependências** | `npm audit` na CI + Dependabot + secret scanning |
+
+## Observabilidade (Application Insights)
+
+Com `APPLICATIONINSIGHTS_CONNECTION_STRING` definida, a API envia telemetria para o **Azure Application Insights**:
+
+- **Automático:** requisições, tempo de resposta, falhas, exceções, chamadas ao PostgreSQL e aos serviços de IA, logs.
+- **Eventos de negócio:**
+
+| Evento | Quando | Propriedades |
+|---|---|---|
+| `OcorrenciaCriada` | cidadão registra um problema | categoria, bairro, urgência, fonte da triagem |
+| `OcorrenciaStatusAlterado` | gestor/robô muda o status | de, para, papel, categoria |
+| `PlanoBAtivado` | GenAI ou Visão falham | serviço, motivo |
+
+- **Rastreio:** toda resposta tem o header `X-Request-Id`, e erros 500 trazem o `requestId` no corpo. O usuário informa o código e a equipe encontra a requisição no Application Insights.
+- **Disponibilidade:** `/health` responde `503` se o banco cair, o que alimenta o Health Check do App Service e o alerta.
+
+Exemplo de consulta (KQL) para o painel:
+
+```kusto
+customEvents
+| where name == "OcorrenciaCriada"
+| summarize ocorrencias = count() by tostring(customDimensions.bairro), bin(timestamp, 1d)
+```
+
 ## Banco de dados
 
 | Sem `DATABASE_URL` | Com `DATABASE_URL` |
@@ -121,13 +159,14 @@ src/
 ├── config/           # leitura de variáveis de ambiente
 ├── routes/           # rotas da API (/health, /auth, /ocorrencias, /enderecos, /indicadores, /docs)
 ├── docs/             # contrato OpenAPI 3.1
-├── middlewares/      # autenticação, RBAC, validação, 404 e erros
+├── middlewares/      # segurança (helmet, CORS, rate limit), autenticação, RBAC, validação e erros
 ├── services/         # regras de negócio (ex.: authService)
 ├── repositories/     # acesso a dados (memória e PostgreSQL, mesma interface)
 ├── domain/           # regras do domínio (papéis, ciclo de vida da ocorrência)
 ├── bootstrap/        # rotinas de inicialização (contas de serviço)
 ├── integrations/     # clientes de GenAI e Visão + triagem por regras (plano B)
 ├── db/               # pool de conexões e migrador
+├── telemetry.js      # Application Insights (no-op sem connection string)
 ├── utils/            # utilitários (HttpError)
 └── container.js      # monta as dependências da aplicação
 tests/                # testes automatizados
@@ -183,4 +222,4 @@ Authorization: Bearer <token>
 | `gestor` | revisa a triagem da IA e aprova ocorrências | variáveis `SEED_GESTOR_EMAIL` / `SEED_GESTOR_SENHA` |
 | `robo` | conta de serviço do robô UiPath | variáveis `SEED_ROBO_EMAIL` / `SEED_ROBO_SENHA` |
 
-Segurança aplicada: senhas com **bcrypt**, hash nunca devolvido pela API, token expira em 1h, `JWT_SECRET` obrigatório em produção e mensagem genérica de login inválido (não revela quais e-mails existem).
+Na autenticação: senhas com **bcrypt**, hash nunca devolvido pela API, token expira em 1h, `JWT_SECRET` obrigatório em produção e mensagem genérica de login inválido (não revela quais e-mails existem).

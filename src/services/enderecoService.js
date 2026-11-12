@@ -1,3 +1,5 @@
+const telemetry = require('../telemetry');
+
 // Fluxo de endereço do cidadão:
 // 1. extrair(): a Visão lê o comprovante e SUGERE um endereço (nada é salvo);
 // 2. o front mostra a sugestão e o cidadão confirma ou corrige;
@@ -32,6 +34,7 @@ function createEnderecoService({ visaoClient, userRepository, logger = console }
         };
       } catch (err) {
         logger.warn(`Visão indisponível: ${err.message}`);
+        telemetry.trackEvent('PlanoBAtivado', { servico: 'visao', motivo: err.message });
         return planoB('Não foi possível ler o comprovante.');
       }
     },
