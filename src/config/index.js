@@ -19,6 +19,17 @@ module.exports = {
   env,
   port: Number(process.env.PORT) || 3000,
   version,
+  // Serviços das outras disciplinas. Sem URL configurada, a API usa o plano B.
+  genai: {
+    url: process.env.GENAI_URL || null,
+    apiKey: process.env.GENAI_API_KEY || null,
+    timeoutMs: Number(process.env.GENAI_TIMEOUT_MS) || 5000,
+  },
+  visao: {
+    url: process.env.VISAO_URL || null,
+    apiKey: process.env.VISAO_API_KEY || null,
+    timeoutMs: Number(process.env.VISAO_TIMEOUT_MS) || 15000,
+  },
   jwt: {
     secret: jwtSecret(),
     expiresIn: process.env.JWT_EXPIRES_IN || '1h',
