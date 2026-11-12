@@ -39,6 +39,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Validar contrato OpenAPI
+        run: npm run lint:openapi
+
       - name: Testes com cobertura (mínimo 70%)
         run: npm run test:coverage
 

@@ -1,0 +1,6 @@
+# Regras de validação do contrato OpenAPI (npm run lint:openapi).
+extends:
+  - recommended
+rules:
+  # /health não tem resposta 4xx por definição (é público e sem parâmetros).
+  operation-4xx-response: off

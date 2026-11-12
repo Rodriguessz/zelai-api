@@ -2,6 +2,8 @@ const express = require('express');
 const { createContainer } = require('./container');
 const healthRouter = require('./routes/health');
 const { createAuthRouter } = require('./routes/auth');
+const { createOcorrenciasRouter } = require('./routes/ocorrencias');
+const { createDocsRouter } = require('./routes/docs');
 const notFound = require('./middlewares/notFound');
 const errorHandler = require('./middlewares/errorHandler');
 
@@ -14,7 +16,9 @@ function createApp(container = createContainer()) {
   app.use(express.json({ limit: '100kb' }));
 
   app.use('/health', healthRouter);
+  app.use(createDocsRouter()); // GET /docs (Swagger UI) e GET /openapi.json
   app.use('/auth', createAuthRouter(container));
+  app.use('/ocorrencias', createOcorrenciasRouter(container));
 
   app.use(notFound);
   app.use(errorHandler);

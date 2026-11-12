@@ -1,0 +1,330 @@
+openapi: 3.1.0
+info:
+  title: ZelaAí API
+  version: 0.1.0
+  license:
+    name: MIT
+    identifier: MIT
+  description: |
+    API da plataforma **ZelaAí** — zeladoria urbana acessível (Global Solution FIAP 2026.2 · CitizenTech).
+
+    **Como usar:** faça login em `POST /auth/login`, copie o `token` e clique em **Authorize** (cadeado) para testar as rotas protegidas.
+
+    **Papéis:** `cidadao` registra e apoia ocorrências · `gestor` aprova, rejeita e resolve · `robo` (UiPath) protocola no Portal 156.
+servers:
+  - url: /
+tags:
+  - name: Saúde
+    description: Monitoramento da API (Health Check e smoke test do deploy)
+  - name: Autenticação
+    description: Cadastro, login e dados do usuário (JWT)
+  - name: Ocorrências
+    description: Problemas do espaço público registrados pelos cidadãos
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      tags: [Saúde]
+      summary: Status da API
+      security: []
+      responses:
+        '200':
+          description: API no ar
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  version: { type: string, example: 0.1.0 }
+                  uptime: { type: integer, example: 120 }
+                  timestamp: { type: string, format: date-time }
+
+  /auth/register:
+    post:
+      operationId: registrar
+      tags: [Autenticação]
+      summary: Cria conta de cidadão
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nome, email, senha]
+              properties:
+                nome: { type: string, minLength: 2, example: Ana Souza }
+                email: { type: string, format: email, example: ana@exemplo.com }
+                senha: { type: string, minLength: 8, maxLength: 72, example: senha-segura }
+      responses:
+        '201':
+          description: Conta criada
+          content: { application/json: { schema: { $ref: '#/components/schemas/Usuario' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [Autenticação]
+      summary: Faz login e devolve o token JWT
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, senha]
+              properties:
+                email: { type: string, format: email, example: ana@exemplo.com }
+                senha: { type: string, example: senha-segura }
+      responses:
+        '200':
+          description: Login realizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  tipo: { type: string, example: Bearer }
+                  expiraEm: { type: string, example: 1h }
+                  usuario: { $ref: '#/components/schemas/Usuario' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /auth/me:
+    get:
+      operationId: obterUsuarioLogado
+      tags: [Autenticação]
+      summary: Dados do usuário logado
+      responses:
+        '200':
+          description: Usuário
+          content: { application/json: { schema: { $ref: '#/components/schemas/Usuario' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /ocorrencias:
+    post:
+      operationId: criarOcorrencia
+      tags: [Ocorrências]
+      summary: Registra uma ocorrência (cidadão)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/NovaOcorrencia' }
+      responses:
+        '201':
+          description: Ocorrência criada, aguardando aprovação
+          content: { application/json: { schema: { $ref: '#/components/schemas/Ocorrencia' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    get:
+      operationId: listarOcorrencias
+      tags: [Ocorrências]
+      summary: Lista ocorrências com filtros e paginação
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/Status' } }
+        - { name: categoria, in: query, schema: { $ref: '#/components/schemas/Categoria' } }
+        - { name: bairro, in: query, schema: { type: string }, example: Bela Vista }
+        - { name: minhas, in: query, description: Só as ocorrências do usuário logado, schema: { type: string, enum: ['true', 'false'] } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: Página de ocorrências
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/Ocorrencia' } }
+                  page: { type: integer }
+                  limit: { type: integer }
+                  total: { type: integer }
+                  totalPages: { type: integer }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /ocorrencias/{id}:
+    get:
+      operationId: obterOcorrencia
+      tags: [Ocorrências]
+      summary: Detalha uma ocorrência
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '200':
+          description: Ocorrência
+          content: { application/json: { schema: { $ref: '#/components/schemas/Ocorrencia' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /ocorrencias/{id}/status:
+    patch:
+      operationId: mudarStatusOcorrencia
+      tags: [Ocorrências]
+      summary: Muda o status (gestor ou robô)
+      description: |
+        Transições permitidas:
+
+        | De | Para | Quem |
+        |---|---|---|
+        | aguardando_aprovacao | aprovada / rejeitada | gestor |
+        | aprovada | protocolada (exige `protocolo156`) | robo |
+        | protocolada | resolvida | gestor |
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/Status' }
+                observacao: { type: string, maxLength: 500, example: Triagem conferida }
+                protocolo156: { type: string, maxLength: 50, example: 2026-0012345 }
+      responses:
+        '200':
+          description: Status atualizado
+          content: { application/json: { schema: { $ref: '#/components/schemas/Ocorrencia' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+  /ocorrencias/{id}/apoios:
+    post:
+      operationId: apoiarOcorrencia
+      tags: [Ocorrências]
+      summary: Apoia uma ocorrência (cidadão, uma vez por pessoa)
+      parameters: [{ $ref: '#/components/parameters/Id' }]
+      responses:
+        '201':
+          description: Apoio registrado
+          content: { application/json: { schema: { $ref: '#/components/schemas/Ocorrencia' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  schemas:
+    Papel: { type: string, enum: [cidadao, gestor, robo] }
+    Categoria:
+      type: string
+      enum: [calcada, iluminacao, semaforo, ponto_onibus, acessibilidade, buraco, lixo, outros]
+    Status:
+      type: string
+      enum: [aguardando_aprovacao, aprovada, rejeitada, protocolada, resolvida]
+
+    Usuario:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        nome: { type: string }
+        email: { type: string, format: email }
+        papel: { $ref: '#/components/schemas/Papel' }
+        criadoEm: { type: string, format: date-time }
+
+    Endereco:
+      type: object
+      required: [logradouro, bairro, cep]
+      properties:
+        logradouro: { type: string, example: Av. Paulista }
+        numero: { type: string, example: '1000' }
+        bairro: { type: string, example: Bela Vista }
+        cep: { type: string, pattern: '^\d{5}-?\d{3}$', example: 01310-100 }
+        cidade: { type: string, default: São Paulo }
+
+    NovaOcorrencia:
+      type: object
+      required: [descricao, categoria, endereco]
+      properties:
+        descricao:
+          type: string
+          minLength: 10
+          maxLength: 1000
+          example: Botão do semáforo para pedestres não funciona há uma semana
+        categoria: { $ref: '#/components/schemas/Categoria' }
+        endereco: { $ref: '#/components/schemas/Endereco' }
+        localizacao:
+          type: object
+          properties:
+            lat: { type: number, example: -23.5631 }
+            lng: { type: number, example: -46.6544 }
+
+    Ocorrencia:
+      allOf:
+        - $ref: '#/components/schemas/NovaOcorrencia'
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            cidadaoId: { type: string, description: 'Só aparece para o próprio autor, o gestor e o robô' }
+            status: { $ref: '#/components/schemas/Status' }
+            urgencia: { type: [string, 'null'], enum: [baixa, media, alta, null] }
+            triagem: { type: [object, 'null'], description: Preenchida pela triagem de IA }
+            protocolo156: { type: [string, 'null'] }
+            minha: { type: boolean }
+            apoios: { type: integer }
+            apoiadaPorMim: { type: boolean }
+            historico:
+              type: array
+              items:
+                type: object
+                properties:
+                  status: { $ref: '#/components/schemas/Status' }
+                  porPapel: { $ref: '#/components/schemas/Papel' }
+                  em: { type: string, format: date-time }
+                  observacao: { type: string }
+            criadaEm: { type: string, format: date-time }
+            atualizadaEm: { type: string, format: date-time }
+
+    Erro:
+      type: object
+      properties:
+        error: { type: string }
+        message: { type: string }
+        details:
+          type: array
+          items:
+            type: object
+            properties:
+              campo: { type: string }
+              mensagem: { type: string }
+
+  responses:
+    ValidationError:
+      description: Dados inválidos
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    Unauthorized:
+      description: Token ausente, inválido ou expirado
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    Forbidden:
+      description: O papel do usuário não permite esta ação
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    NotFound:
+      description: Recurso não encontrado
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+    Conflict:
+      description: Conflito com o estado atual (duplicado ou transição inválida)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Erro' } } }
+
+security:
+  - bearerAuth: []
