@@ -248,7 +248,7 @@ paths:
                   fonte: { type: string, enum: [visao, manual] }
                   empresa: { type: [string, 'null'], example: Sabesp }
                   confianca: { type: number, minimum: 0, maximum: 1, example: 0.93 }
-                  revisar: { type: boolean, description: true quando a confiança é menor que 0,8 }
+                  revisar: { type: boolean, description: 'true quando a confiança é menor que 0,8' }
                   endereco:
                     type: [object, 'null']
                     properties:
