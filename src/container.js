@@ -3,6 +3,10 @@ const { createUserRepository } = require('./repositories/userRepository.memory')
 const { createOcorrenciaRepository } = require('./repositories/ocorrenciaRepository.memory');
 const { createAuthService } = require('./services/authService');
 const { createOcorrenciaService } = require('./services/ocorrenciaService');
+const { createTriagemService } = require('./services/triagemService');
+const { createGenaiClient } = require('./integrations/genaiClient');
+const { createVisaoClient } = require('./integrations/visaoClient');
+const { createEnderecoService } = require('./services/enderecoService');
 
 // Monta as dependências da aplicação em um só lugar (composition root).
 // Nos testes podemos criar um container novo, isolado, a cada suíte.
@@ -12,10 +16,26 @@ function createContainer(overrides = {}) {
 
   const authService =
     overrides.authService ?? createAuthService({ userRepository, jwtConfig: config.jwt });
+  const genaiClient = overrides.genaiClient ?? createGenaiClient(config.genai);
+  const triagemService = overrides.triagemService ?? createTriagemService({ genaiClient });
   const ocorrenciaService =
-    overrides.ocorrenciaService ?? createOcorrenciaService({ ocorrenciaRepository });
+    overrides.ocorrenciaService ??
+    createOcorrenciaService({ ocorrenciaRepository, triagemService });
 
-  return { userRepository, ocorrenciaRepository, authService, ocorrenciaService };
+  const visaoClient = overrides.visaoClient ?? createVisaoClient(config.visao);
+  const enderecoService =
+    overrides.enderecoService ?? createEnderecoService({ visaoClient, userRepository });
+
+  return {
+    userRepository,
+    ocorrenciaRepository,
+    authService,
+    genaiClient,
+    triagemService,
+    ocorrenciaService,
+    visaoClient,
+    enderecoService,
+  };
 }
 
 module.exports = { createContainer };

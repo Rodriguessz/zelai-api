@@ -21,6 +21,8 @@ describe('Documentação OpenAPI', () => {
         '/ocorrencias/{id}',
         '/ocorrencias/{id}/status',
         '/ocorrencias/{id}/apoios',
+        '/enderecos/extracao',
+        '/enderecos/meu',
       ]),
     );
   });

@@ -16,7 +16,7 @@ function toPublic({ apoiadores, cidadaoId, ...ocorrencia }, user) {
   };
 }
 
-function createOcorrenciaService({ ocorrenciaRepository }) {
+function createOcorrenciaService({ ocorrenciaRepository, triagemService }) {
   // Problemas do espaço público são visíveis a todos os usuários autenticados
   // (é o que permite apoiar a ocorrência de outra pessoa).
   async function findOrFail(id) {
@@ -27,6 +27,9 @@ function createOcorrenciaService({ ocorrenciaRepository }) {
 
   return {
     async create(user, { descricao, categoria, endereco, localizacao }) {
+      // Triagem automática (GenAI ou regras). Nunca impede o registro da ocorrência.
+      const triagem = await triagemService.triar({ descricao, categoria });
+
       const ocorrencia = await ocorrenciaRepository.create({
         cidadaoId: user.id,
         descricao,
@@ -34,8 +37,8 @@ function createOcorrenciaService({ ocorrenciaRepository }) {
         endereco,
         localizacao: localizacao ?? null,
         status: STATUS.AGUARDANDO_APROVACAO,
-        urgencia: null, //   preenchida pela triagem de IA (próximo PR)
-        triagem: null, //    idem
+        urgencia: triagem.urgencia,
+        triagem,
         protocolo156: null,
         historico: [{ status: STATUS.AGUARDANDO_APROVACAO, porPapel: user.papel, em: new Date().toISOString() }],
       });

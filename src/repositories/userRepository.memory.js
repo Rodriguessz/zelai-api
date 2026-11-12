@@ -28,6 +28,14 @@ function createUserRepository() {
     async findById(id) {
       return users.get(id) ?? null;
     },
+
+    async update(id, changes) {
+      const atual = users.get(id);
+      if (!atual) return null;
+      const atualizado = { ...atual, ...changes };
+      users.set(id, atualizado);
+      return atualizado;
+    },
   };
 }
 

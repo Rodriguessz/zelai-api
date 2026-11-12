@@ -20,6 +20,8 @@ tags:
     description: Cadastro, login e dados do usuário (JWT)
   - name: Ocorrências
     description: Problemas do espaço público registrados pelos cidadãos
+  - name: Endereço
+    description: Leitura do comprovante por Visão Computacional e confirmação pelo cidadão
 
 paths:
   /health:
@@ -214,6 +216,77 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
 
+  /enderecos/extracao:
+    post:
+      tags: [Endereço]
+      operationId: extrairEndereco
+      summary: Lê o comprovante e sugere o endereço (cidadão)
+      description: |
+        Envia a foto do comprovante (conta de luz, água ou telefone) ao serviço de Visão Computacional.
+        **A imagem não é salva.** A resposta é só uma sugestão: o cidadão confirma em `PUT /enderecos/meu`.
+        Se a Visão estiver indisponível, responde `fonte: manual` (plano B).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [comprovante]
+              properties:
+                comprovante:
+                  type: string
+                  format: binary
+                  description: Imagem JPG, PNG ou WEBP de até 5 MB
+      responses:
+        '200':
+          description: Sugestão de endereço (ou orientação para preenchimento manual)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fonte: { type: string, enum: [visao, manual] }
+                  empresa: { type: [string, 'null'], example: Sabesp }
+                  confianca: { type: number, minimum: 0, maximum: 1, example: 0.93 }
+                  revisar: { type: boolean, description: 'true quando a confiança é menor que 0,8' }
+                  endereco:
+                    type: [object, 'null']
+                    properties:
+                      logradouro: { type: [string, 'null'] }
+                      numero: { type: [string, 'null'] }
+                      bairro: { type: [string, 'null'] }
+                      cep: { type: [string, 'null'], example: 01001-000 }
+                      cidade: { type: [string, 'null'] }
+                  mensagem: { type: string }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /enderecos/meu:
+    put:
+      tags: [Endereço]
+      operationId: confirmarEndereco
+      summary: Confirma ou corrige o endereço do cidadão
+      description: Por minimização de dados (LGPD), são salvos apenas bairro, CEP e cidade.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bairro, cep]
+              properties:
+                bairro: { type: string, example: Sé }
+                cep: { type: string, example: 01001-000 }
+                cidade: { type: string, default: São Paulo }
+      responses:
+        '200':
+          description: Endereço salvo
+          content: { application/json: { schema: { $ref: '#/components/schemas/Usuario' } } }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -241,7 +314,25 @@ components:
         nome: { type: string }
         email: { type: string, format: email }
         papel: { $ref: '#/components/schemas/Papel' }
+        endereco:
+          type: object
+          description: Só bairro, CEP e cidade (minimização de dados)
+          properties:
+            bairro: { type: string }
+            cep: { type: string }
+            cidade: { type: string }
         criadoEm: { type: string, format: date-time }
+
+    Triagem:
+      type: object
+      description: Classificação automática. A decisão final é sempre do gestor.
+      properties:
+        fonte: { type: string, enum: [ia, regras], description: ia = GenAI · regras = plano B }
+        urgencia: { type: string, enum: [baixa, media, alta] }
+        categoriaSugerida: { $ref: '#/components/schemas/Categoria' }
+        resumo: { type: string }
+        explicacao: { type: string, description: Por que a urgência foi atribuída }
+        em: { type: string, format: date-time }
 
     Endereco:
       type: object
@@ -278,8 +369,8 @@ components:
             id: { type: string, format: uuid }
             cidadaoId: { type: string, description: 'Só aparece para o próprio autor, o gestor e o robô' }
             status: { $ref: '#/components/schemas/Status' }
-            urgencia: { type: [string, 'null'], enum: [baixa, media, alta, null] }
-            triagem: { type: [object, 'null'], description: Preenchida pela triagem de IA }
+            urgencia: { type: string, enum: [baixa, media, alta] }
+            triagem: { $ref: '#/components/schemas/Triagem' }
             protocolo156: { type: [string, 'null'] }
             minha: { type: boolean }
             apoios: { type: integer }
