@@ -41,6 +41,17 @@ describe('POST /ocorrencias', () => {
     expect(res.body).not.toHaveProperty('apoiadores');
   });
 
+  it('nasce com triagem automática (plano B por regras, sem GenAI configurada)', async () => {
+    const { criar } = await setup();
+    const res = await criar(
+      novaOcorrencia({ descricao: 'Semáforo quebrado, idosos não conseguem atravessar' }),
+    );
+
+    expect(res.body.urgencia).toBe('alta');
+    expect(res.body.triagem).toMatchObject({ fonte: 'regras', urgencia: 'alta' });
+    expect(res.body.triagem.explicacao).toBeDefined();
+  });
+
   it('exige login (401)', async () => {
     const { app } = await setup();
     const res = await request(app).post('/ocorrencias').send(novaOcorrencia());
