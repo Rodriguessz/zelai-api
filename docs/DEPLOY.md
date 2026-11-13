@@ -29,6 +29,7 @@ APP_NAME=zelai-api ALERT_EMAIL=seu-email@exemplo.com LOCATION=eastus bash infra/
 | `APP_NAME` | sim | Nome único no mundo; vira `https://APP_NAME.azurewebsites.net` |
 | `ALERT_EMAIL` | sim | Quem recebe os alertas |
 | `LOCATION` | não | Região (padrão `eastus`, mais barata; `brazilsouth` tem menor latência) |
+| `PG_LOCATION` | não | Região só do PostgreSQL (padrão: a mesma de `LOCATION`) |
 | `CORS_ORIGINS` | não | URL do front-end, ex.: `https://zelai-front.azurewebsites.net` |
 
 O script cria:
@@ -125,9 +126,25 @@ az login --scope "https://graph.microsoft.com//.default"
 
 Se continuar falhando, o script termina mesmo assim e avisa: use o **plano B** (seção 5).
 
-**`The resource ... is not available in location` (PostgreSQL ou App Service)**
+**`The location is restricted from performing this operation` (ao criar o PostgreSQL)**
 
-Algumas assinaturas de estudante bloqueiam certas regiões para certos serviços. Rode de novo com outra região, por exemplo `LOCATION=eastus2` ou `LOCATION=brazilsouth`. Se o Resource Group já foi criado em outra região, não tem problema: os recursos podem ficar em regiões diferentes do grupo.
+Assinaturas de estudante costumam bloquear o PostgreSQL em algumas regiões (por exemplo `eastus`). Mantenha o resto em `LOCATION` e escolha outra região **só para o banco** com `PG_LOCATION`:
+
+```bash
+PG_LOCATION=eastus2 APP_NAME=zelai-api ALERT_EMAIL=seu-email@exemplo.com bash infra/azure-setup.sh
+```
+
+Para descobrir quais regiões a sua assinatura permite (contas de estudante têm uma política com essa lista):
+
+```bash
+az policy assignment list --query "[].{politica:displayName, regioes:parameters.listOfAllowedLocations.value}" -o json
+```
+
+Banco e App Service em regiões diferentes funcionam normalmente; dentro dos EUA a latência extra é de poucos milissegundos.
+
+**`... is not available in location` (App Service ou outro recurso)**
+
+Rode de novo com outra região em `LOCATION`, de preferência uma da lista de regiões permitidas.
 
 ## 5. Plano B: sem permissão para OIDC
 

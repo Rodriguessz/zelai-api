@@ -22,6 +22,9 @@ set -euo pipefail
 : "${APP_NAME:?Defina APP_NAME (vira https://APP_NAME.azurewebsites.net)}"
 : "${ALERT_EMAIL:?Defina ALERT_EMAIL (quem recebe os alertas)}"
 LOCATION="${LOCATION:-eastus}"
+# Região só do PostgreSQL. Assinaturas de estudante às vezes bloqueiam o PostgreSQL
+# em uma região ("The location is restricted from performing this operation").
+PG_LOCATION="${PG_LOCATION:-$LOCATION}"
 RG="${RG:-rg-citizentech-prod}"
 GITHUB_REPO="${GITHUB_REPO:-Rodriguessz/zelai-api}"
 CORS_ORIGINS="${CORS_ORIGINS:-}"
@@ -56,7 +59,7 @@ az config set extension.use_dynamic_install=yes_without_prompt --only-show-error
 SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
 TENANT_ID="$(az account show --query tenantId -o tsv)"
 echo "Assinatura: $(az account show --query name -o tsv) ($SUBSCRIPTION_ID)"
-echo "Região: $LOCATION · Resource Group: $RG · App: $APP_NAME"
+echo "Região: $LOCATION (PostgreSQL: $PG_LOCATION) · Resource Group: $RG · App: $APP_NAME"
 
 # ---------- 0. Provedores de recursos ----------------------------------------
 # Assinaturas novas (ex.: Azure for Students) vêm com poucos provedores ativos.
@@ -113,10 +116,16 @@ passo "4/8 PostgreSQL Flexible Server (B1ms)"
 if ! az postgres flexible-server show -g "$RG" -n "$PG_SERVER" -o none 2>/dev/null; then
   PG_PASS="$(gerar_senha)"
   # 0.0.0.0 = só serviços da Azure acessam (o App Service). Ninguém da internet.
-  az postgres flexible-server create -g "$RG" -n "$PG_SERVER" -l "$LOCATION" \
+  if ! az postgres flexible-server create -g "$RG" -n "$PG_SERVER" -l "$PG_LOCATION" \
     --tier Burstable --sku-name Standard_B1ms --storage-size 32 --version 16 \
     --admin-user "$PG_ADMIN" --admin-password "$PG_PASS" \
-    --public-access 0.0.0.0 --yes -o none
+    --public-access 0.0.0.0 --yes -o none; then
+    aviso "Não foi possível criar o PostgreSQL em '$PG_LOCATION'."
+    aviso "Se a mensagem foi 'The location is restricted', escolha outra região só para o banco:"
+    aviso "  PG_LOCATION=eastus2 APP_NAME=$APP_NAME ALERT_EMAIL=$ALERT_EMAIL bash infra/azure-setup.sh"
+    aviso "Regiões permitidas na sua assinatura: veja docs/DEPLOY.md, 'Problemas comuns'."
+    exit 1
+  fi
   az postgres flexible-server db create -g "$RG" -s "$PG_SERVER" -d "$PG_DB" -o none
   gravar_se_novo database-url \
     "postgres://${PG_ADMIN}:${PG_PASS}@${PG_SERVER}.postgres.database.azure.com:5432/${PG_DB}"
