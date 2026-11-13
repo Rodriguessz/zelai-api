@@ -126,7 +126,6 @@ if ! az postgres flexible-server show -g "$RG" -n "$PG_SERVER" -o none 2>/dev/nu
     aviso "Regiões permitidas na sua assinatura: veja docs/DEPLOY.md, 'Problemas comuns'."
     exit 1
   fi
-  az postgres flexible-server db create -g "$RG" -s "$PG_SERVER" -d "$PG_DB" -o none
   gravar_se_novo database-url \
     "postgres://${PG_ADMIN}:${PG_PASS}@${PG_SERVER}.postgres.database.azure.com:5432/${PG_DB}"
 elif segredo_existe database-url; then
@@ -137,12 +136,19 @@ else
   aviso "Servidor já existe, mas o segredo database-url não. Redefinindo a senha do banco..."
   PG_PASS="$(gerar_senha)"
   az postgres flexible-server update -g "$RG" -n "$PG_SERVER" --admin-password "$PG_PASS" -o none
-  az postgres flexible-server db create -g "$RG" -s "$PG_SERVER" -d "$PG_DB" -o none 2>/dev/null \
-    || echo "  banco '$PG_DB' já existe"
   gravar_se_novo database-url \
     "postgres://${PG_ADMIN}:${PG_PASS}@${PG_SERVER}.postgres.database.azure.com:5432/${PG_DB}"
 fi
 unset PG_PASS
+
+# Em qualquer caso, garante que o banco da aplicação existe dentro do servidor.
+# Sem esconder erros: se a criação falhar, a mensagem real aparece e o script para.
+if az postgres flexible-server db show -g "$RG" -s "$PG_SERVER" -d "$PG_DB" -o none 2>/dev/null; then
+  echo "  banco '$PG_DB' já existe"
+else
+  echo "  criando o banco '$PG_DB'..."
+  az postgres flexible-server db create -g "$RG" -s "$PG_SERVER" -d "$PG_DB" -o none
+fi
 gravar_se_novo jwt-secret "$(openssl rand -hex 32)"
 gravar_se_novo seed-gestor-senha "$(gerar_senha)"
 gravar_se_novo seed-robo-senha "$(gerar_senha)"

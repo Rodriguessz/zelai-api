@@ -145,6 +145,20 @@ az webapp config appsettings set -g rg-citizentech-prod -n zelai-api -o none --s
 
 Rodar o script de novo também resolve: a cada execução ele altera a configuração `KEYVAULT_REFS_ATUALIZADAS_EM`.
 
+**API não sobe: `database "zelai" does not exist`**
+
+O servidor PostgreSQL existe, mas o banco da aplicação não foi criado dentro dele. Crie e reinicie:
+
+```bash
+az postgres flexible-server db create -g rg-citizentech-prod -s zelai-api-pg -d zelai
+```
+
+```bash
+az webapp restart -g rg-citizentech-prod -n zelai-api
+```
+
+Rodar o script de novo também resolve: ele sempre confere se o banco existe.
+
 **`AADSTS700213: No matching federated identity record found for presented assertion subject` (no login do CD)**
 
 O GitHub pode enviar o *subject* do token OIDC no formato **com IDs** (`repo:dono@ID/repo@ID:environment:production`), e não no clássico (`repo:dono/repo:environment:production`). O script atual já registra os dois formatos. Se a infraestrutura foi criada antes dessa correção, registre o formato que aparece na mensagem de erro:
