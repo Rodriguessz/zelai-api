@@ -137,11 +137,13 @@ az rest --method get --url "$(az webapp show -g rg-citizentech-prod -n zelai-api
 - `SecretNotFound`: o segredo não existe. Rode o script de novo: ele recria o `database-url` (redefinindo a senha do banco, se preciso).
 - `AccessToKeyVaultDenied`: a permissão da Managed Identity ainda não propagou. Aguarde alguns minutos.
 
-Depois, reinicie o App Service:
+Depois de criar o segredo, **force uma nova consulta ao Key Vault**. O App Service guarda o resultado em cache (inclusive o `SecretNotFound`), e só reiniciar **não** resolve; é preciso alterar alguma configuração:
 
 ```bash
-az webapp restart -g rg-citizentech-prod -n zelai-api
+az webapp config appsettings set -g rg-citizentech-prod -n zelai-api -o none --settings "DATABASE_URL=@Microsoft.KeyVault(VaultName=kv-zelai-api;SecretName=database-url)"
 ```
+
+Rodar o script de novo também resolve: a cada execução ele altera a configuração `KEYVAULT_REFS_ATUALIZADAS_EM`.
 
 **`AADSTS700213: No matching federated identity record found for presented assertion subject` (no login do CD)**
 

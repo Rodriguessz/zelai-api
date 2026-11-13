@@ -178,7 +178,11 @@ az webapp config appsettings set -g "$RG" -n "$APP_NAME" -o none --settings \
   SEED_ROBO_EMAIL="$ROBO_EMAIL" \
   SEED_ROBO_SENHA="$(kv seed-robo-senha)" \
   APPLICATIONINSIGHTS_CONNECTION_STRING="$APPI_CONN" \
-  CORS_ORIGINS="$CORS_ORIGINS"
+  CORS_ORIGINS="$CORS_ORIGINS" \
+  KEYVAULT_REFS_ATUALIZADAS_EM="$(date -u +%FT%TZ)"
+# A variável acima muda a cada execução de propósito: o App Service guarda em cache o
+# resultado das referências @Microsoft.KeyVault(...) (inclusive "SecretNotFound") e só
+# consulta o Key Vault de novo quando alguma configuração muda. Reiniciar NÃO basta.
 
 # ---------- 6. Alertas --------------------------------------------------------
 passo "6/8 Alertas com aviso por e-mail"
