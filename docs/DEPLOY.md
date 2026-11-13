@@ -126,6 +126,16 @@ az login --scope "https://graph.microsoft.com//.default"
 
 Se continuar falhando, o script termina mesmo assim e avisa: use o **plano B** (seção 5).
 
+**`AADSTS700213: No matching federated identity record found for presented assertion subject` (no login do CD)**
+
+O GitHub pode enviar o *subject* do token OIDC no formato **com IDs** (`repo:dono@ID/repo@ID:environment:production`), e não no clássico (`repo:dono/repo:environment:production`). O script atual já registra os dois formatos. Se a infraestrutura foi criada antes dessa correção, registre o formato que aparece na mensagem de erro:
+
+```bash
+az ad app federated-credential create --id <AZURE_CLIENT_ID> --parameters '{"name":"github-environment-production-ids","issuer":"https://token.actions.githubusercontent.com","subject":"<SUBJECT DA MENSAGEM DE ERRO>","audiences":["api://AzureADTokenExchange"]}'
+```
+
+Depois, em **Actions**, abra a execução que falhou e clique em **Re-run failed jobs**.
+
 **`The location is restricted from performing this operation` (ao criar o PostgreSQL)**
 
 Assinaturas de estudante costumam bloquear o PostgreSQL em algumas regiões (por exemplo `eastus`). Mantenha o resto em `LOCATION` e escolha outra região **só para o banco** com `PG_LOCATION`:
