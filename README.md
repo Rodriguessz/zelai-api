@@ -5,7 +5,32 @@
 
 API Node.js do **ZelaAí**, plataforma de zeladoria urbana acessível desenvolvida para a Global Solution 2026.2 (CitizenTech · FIAP).
 
-> A Ficha Técnica do MVP será adicionada ao final do projeto.
+**🌐 API em produção:** https://zelai-api.azurewebsites.net/health · **📘 Documentação interativa:** https://zelai-api.azurewebsites.net/docs
+
+## Ficha Técnica do MVP
+
+| Campo | Conteúdo |
+|---|---|
+| **Nome do produto** | ZelaAí |
+| **Cidadão e território** | Idosos e pessoas com deficiência em bairros de São Paulo, os primeiros a sofrer com calçadas quebradas, semáforos sem funcionar e pontos de ônibus sem acessibilidade |
+| **Problema, em uma frase** | Falhas no espaço público que afetam quem mais depende dele não chegam à prefeitura de forma simples e não são acompanhadas até a solução |
+| **Proposta de valor** | *"Reporte em 1 minuto, acompanhe até resolver"*: o cidadão registra o problema, a IA prioriza, o gestor aprova e um robô protocola no Portal 156 |
+| **Arquitetura: componentes** | API Node.js 22 (Azure App Service) · PostgreSQL 16 (Azure) · Key Vault · Application Insights · Visão Computacional (OCR do comprovante) · GenAI (triagem) · Apache Airflow (dados) · robô UiPath (RPA) · Power BI · front-end web acessível |
+| **Fontes de dados** | Ocorrências registradas na plataforma · dados abertos SP156 e GeoSampa · IBGE (população idosa por distrito), integrados pelo Airflow na tabela `prioridade_por_bairro` |
+| **Modelos de IA utilizados** | OCR de comprovantes de residência (Visão Computacional) · LLM para classificar urgência e resumir a ocorrência (GenAI), com **plano B por regras** e **decisão final humana** (gestor) |
+| **URL do MVP e repositório** | API: https://zelai-api.azurewebsites.net · Swagger: https://zelai-api.azurewebsites.net/docs · Repositório: https://github.com/Rodriguessz/zelai-api |
+| **Indicadores de impacto** | Tempo médio entre o registro e o protocolo no 156 · % de ocorrências resolvidas · ocorrências e apoios por bairro · prioridade por bairro, todos em `GET /indicadores` |
+| **ODS conectados** | **ODS 9** (infraestrutura resiliente) · **ODS 10** (redução das desigualdades: acessibilidade para idosos e PcD) · **ODS 11** (cidades e comunidades sustentáveis) |
+
+### Entrega de DevOps (Secure DevOps & Cloud Computing)
+
+| Critério | Onde ver |
+|---|---|
+| **Deploy** | App Service Linux B1 com HTTPS Only e Health Check: [`/health`](https://zelai-api.azurewebsites.net/health) |
+| **CI/CD** | [CI](.github/workflows/ci.yml) em todo PR (lint, contrato OpenAPI, shellcheck, testes com PostgreSQL, audit) · [CD](.github/workflows/cd.yml) a cada merge (OIDC, deploy, smoke test, rollback) |
+| **Segurança** | Segredos no Key Vault via Managed Identity · login OIDC sem senha · JWT + RBAC · helmet, CORS, rate limit · `main` protegida · Dependabot e secret scanning ([detalhes](#segurança)) |
+| **Monitoramento** | Application Insights com eventos de negócio · alertas por e-mail (Health Check, 5xx, lentidão) ([detalhes](#observabilidade-application-insights)) |
+| **Custo e documentação** | ~US$ 30/mês, detalhado em [docs/DEPLOY.md](docs/DEPLOY.md#6-custos-estimados) · infraestrutura como código em [infra/azure-setup.sh](infra/azure-setup.sh) |
 
 ## Arquitetura
 
