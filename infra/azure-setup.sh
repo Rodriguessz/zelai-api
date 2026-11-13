@@ -192,6 +192,25 @@ alerta alerta-lentidao "avg HttpResponseTime > 3" 3 \
 passo "7/8 Login do GitHub Actions por OIDC (sem senha)"
 # Este passo usa o Microsoft Graph. Se ele falhar (permissão ou token expirado no
 # Cloud Shell), o script NÃO para: segue com o plano B do deploy.
+criar_credencial() { # nome, subject
+  local arquivo
+  arquivo="$(mktemp)"
+  cat > "$arquivo" <<JSON
+{
+  "name": "$1",
+  "issuer": "https://token.actions.githubusercontent.com",
+  "subject": "$2",
+  "audiences": ["api://AzureADTokenExchange"]
+}
+JSON
+  if az ad app federated-credential create --id "$CLIENT_ID" --parameters "@$arquivo" -o none 2>/dev/null; then
+    echo "  credencial federada criada: $2"
+  else
+    echo "  credencial federada já existe: $2"
+  fi
+  rm -f "$arquivo"
+}
+
 configurar_oidc() {
   CLIENT_ID="$(az ad app list --display-name "$OIDC_APP" --query '[0].appId' -o tsv 2>/dev/null || true)"
   if [ -z "$CLIENT_ID" ]; then
@@ -200,18 +219,22 @@ configurar_oidc() {
   [ -n "$CLIENT_ID" ] || return 1
   az ad sp show --id "$CLIENT_ID" -o none 2>/dev/null || az ad sp create --id "$CLIENT_ID" -o none || return 1
   SP_ID="$(az ad sp show --id "$CLIENT_ID" --query id -o tsv)" || return 1
-  CRED_FILE="$(mktemp)"
-  cat > "$CRED_FILE" <<JSON
-{
-  "name": "github-environment-production",
-  "issuer": "https://token.actions.githubusercontent.com",
-  "subject": "repo:${GITHUB_REPO}:environment:production",
-  "audiences": ["api://AzureADTokenExchange"]
-}
-JSON
-  az ad app federated-credential create --id "$CLIENT_ID" --parameters "@$CRED_FILE" -o none 2>/dev/null \
-    || echo "  credencial federada já existe"
-  rm -f "$CRED_FILE"
+  # O GitHub envia o "subject" do token OIDC em um de dois formatos:
+  #   clássico:  repo:dono/repo:environment:production
+  #   com IDs:   repo:dono@ID_DONO/repo@ID_REPO:environment:production
+  # (o formato com IDs impede que um repositório recriado com o mesmo nome herde o acesso).
+  # Registramos os dois; os IDs vêm da API pública do GitHub.
+  criar_credencial github-environment-production "repo:${GITHUB_REPO}:environment:production"
+  local info owner_id repo_id
+  info="$(curl -fsS "https://api.github.com/repos/${GITHUB_REPO}" 2>/dev/null || true)"
+  owner_id="$(jq -r '.owner.id // empty' <<<"$info" 2>/dev/null || true)"
+  repo_id="$(jq -r '.id // empty' <<<"$info" 2>/dev/null || true)"
+  if [ -n "$owner_id" ] && [ -n "$repo_id" ]; then
+    criar_credencial github-environment-production-ids \
+      "repo:${GITHUB_REPO%%/*}@${owner_id}/${GITHUB_REPO##*/}@${repo_id}:environment:production"
+  else
+    aviso "Não consegui ler os IDs do repositório no GitHub; registrei só o formato clássico."
+  fi
   # Menor privilégio: só pode publicar NESTE App Service, nada além disso.
   az role assignment create --assignee-object-id "$SP_ID" --assignee-principal-type ServicePrincipal \
     --role "Website Contributor" --scope "$WEBAPP_ID" -o none 2>/dev/null || true
