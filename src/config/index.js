@@ -15,6 +15,22 @@ function buildInfo() {
 
 const env = process.env.NODE_ENV || 'development';
 
+// Na Azure, App Settings como DATABASE_URL apontam para o Key Vault:
+//   @Microsoft.KeyVault(VaultName=...;SecretName=...)
+// Se a referência não resolver (segredo inexistente, sem permissão…), a Azure entrega
+// esse TEXTO para a aplicação. Detectamos isso e falhamos com uma mensagem clara,
+// em vez de erros confusos como "getaddrinfo ENOTFOUND base".
+const SEGREDOS = ['DATABASE_URL', 'JWT_SECRET', 'SEED_GESTOR_SENHA', 'SEED_ROBO_SENHA'];
+for (const nome of SEGREDOS) {
+  if (process.env[nome]?.startsWith('@Microsoft.KeyVault(')) {
+    throw new Error(
+      `${nome} não foi resolvida pelo Key Vault (a Azure entregou a referência em vez do valor). ` +
+        'Verifique se o segredo existe e se o App Service tem permissão de leitura. ' +
+        'Veja docs/DEPLOY.md, "Problemas comuns".',
+    );
+  }
+}
+
 function jwtSecret() {
   if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
   if (env === 'production') {

@@ -126,6 +126,23 @@ az login --scope "https://graph.microsoft.com//.default"
 
 Se continuar falhando, o script termina mesmo assim e avisa: use o **plano B** (seção 5).
 
+**API não sobe: `DATABASE_URL não foi resolvida pelo Key Vault` (ou `getaddrinfo ENOTFOUND base` em versões antigas)**
+
+Uma referência `@Microsoft.KeyVault(...)` não foi resolvida. Veja o status de cada uma:
+
+```bash
+az rest --method get --url "$(az webapp show -g rg-citizentech-prod -n zelai-api --query id -o tsv)/config/configreferences/appsettings?api-version=2022-03-01" --query "value[].{config:name, status:properties.status}" -o table
+```
+
+- `SecretNotFound`: o segredo não existe. Rode o script de novo: ele recria o `database-url` (redefinindo a senha do banco, se preciso).
+- `AccessToKeyVaultDenied`: a permissão da Managed Identity ainda não propagou. Aguarde alguns minutos.
+
+Depois, reinicie o App Service:
+
+```bash
+az webapp restart -g rg-citizentech-prod -n zelai-api
+```
+
 **`AADSTS700213: No matching federated identity record found for presented assertion subject` (no login do CD)**
 
 O GitHub pode enviar o *subject* do token OIDC no formato **com IDs** (`repo:dono@ID/repo@ID:environment:production`), e não no clássico (`repo:dono/repo:environment:production`). O script atual já registra os dois formatos. Se a infraestrutura foi criada antes dessa correção, registre o formato que aparece na mensagem de erro:

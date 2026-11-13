@@ -22,4 +22,14 @@ describe('config.jwt', () => {
     delete process.env.JWT_SECRET;
     expect(require('../src/config').jwt.secret).toHaveLength(64);
   });
+
+  it.each(['DATABASE_URL', 'JWT_SECRET', 'SEED_GESTOR_SENHA'])(
+    'falha com mensagem clara se %s chegar como referência não resolvida do Key Vault',
+    (nome) => {
+      process.env.NODE_ENV = 'production';
+      process.env.JWT_SECRET = 'segredo';
+      process.env[nome] = '@Microsoft.KeyVault(VaultName=kv-zelai-api;SecretName=database-url)';
+      expect(() => require('../src/config')).toThrow(`${nome} não foi resolvida pelo Key Vault`);
+    },
+  );
 });
