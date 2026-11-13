@@ -30,7 +30,6 @@ API Node.js do **ZelaAí**, plataforma de zeladoria urbana acessível desenvolvi
 | **CI/CD** | [CI](.github/workflows/ci.yml) em todo PR (lint, contrato OpenAPI, shellcheck, testes com PostgreSQL, audit) · [CD](.github/workflows/cd.yml) a cada merge (OIDC, deploy, smoke test, rollback) |
 | **Segurança** | Segredos no Key Vault via Managed Identity · login OIDC sem senha · JWT + RBAC · helmet, CORS, rate limit · `main` protegida · Dependabot e secret scanning ([detalhes](#segurança)) |
 | **Monitoramento** | Application Insights com eventos de negócio · alertas por e-mail (Health Check, 5xx, lentidão) ([detalhes](#observabilidade-application-insights)) |
-| **Custo e documentação** | ~US$ 30/mês, detalhado em [docs/DEPLOY.md](docs/DEPLOY.md#6-custos-estimados) · infraestrutura como código em [infra/azure-setup.sh](infra/azure-setup.sh) |
 
 ## Arquitetura
 
