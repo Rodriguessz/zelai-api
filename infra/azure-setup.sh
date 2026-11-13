@@ -129,9 +129,20 @@ if ! az postgres flexible-server show -g "$RG" -n "$PG_SERVER" -o none 2>/dev/nu
   az postgres flexible-server db create -g "$RG" -s "$PG_SERVER" -d "$PG_DB" -o none
   gravar_se_novo database-url \
     "postgres://${PG_ADMIN}:${PG_PASS}@${PG_SERVER}.postgres.database.azure.com:5432/${PG_DB}"
-else
+elif segredo_existe database-url; then
   echo "  servidor já existe (a senha atual está no segredo database-url)"
+else
+  # Servidor existe, mas o segredo não (ex.: uma execução anterior falhou no meio).
+  # A senha antiga não é recuperável: definimos uma nova e gravamos o segredo.
+  aviso "Servidor já existe, mas o segredo database-url não. Redefinindo a senha do banco..."
+  PG_PASS="$(gerar_senha)"
+  az postgres flexible-server update -g "$RG" -n "$PG_SERVER" --admin-password "$PG_PASS" -o none
+  az postgres flexible-server db create -g "$RG" -s "$PG_SERVER" -d "$PG_DB" -o none 2>/dev/null \
+    || echo "  banco '$PG_DB' já existe"
+  gravar_se_novo database-url \
+    "postgres://${PG_ADMIN}:${PG_PASS}@${PG_SERVER}.postgres.database.azure.com:5432/${PG_DB}"
 fi
+unset PG_PASS
 gravar_se_novo jwt-secret "$(openssl rand -hex 32)"
 gravar_se_novo seed-gestor-senha "$(gerar_senha)"
 gravar_se_novo seed-robo-senha "$(gerar_senha)"
