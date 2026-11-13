@@ -150,7 +150,7 @@ Rodar o script de novo também resolve: a cada execução ele altera a configura
 O servidor PostgreSQL existe, mas o banco da aplicação não foi criado dentro dele. Crie e reinicie:
 
 ```bash
-az postgres flexible-server db create -g rg-citizentech-prod -s zelai-api-pg -d zelai
+az postgres flexible-server db create --resource-group rg-citizentech-prod --server-name zelai-api-pg --name zelai
 ```
 
 ```bash

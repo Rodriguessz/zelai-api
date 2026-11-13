@@ -143,11 +143,12 @@ unset PG_PASS
 
 # Em qualquer caso, garante que o banco da aplicação existe dentro do servidor.
 # Sem esconder erros: se a criação falhar, a mensagem real aparece e o script para.
-if az postgres flexible-server db show -g "$RG" -s "$PG_SERVER" -d "$PG_DB" -o none 2>/dev/null; then
+# Atenção: versões atuais da CLI usam --name para o banco (o antigo -d/--database-name não existe mais).
+if az postgres flexible-server db show --resource-group "$RG" --server-name "$PG_SERVER" --name "$PG_DB" -o none 2>/dev/null; then
   echo "  banco '$PG_DB' já existe"
 else
   echo "  criando o banco '$PG_DB'..."
-  az postgres flexible-server db create -g "$RG" -s "$PG_SERVER" -d "$PG_DB" -o none
+  az postgres flexible-server db create --resource-group "$RG" --server-name "$PG_SERVER" --name "$PG_DB" -o none
 fi
 gravar_se_novo jwt-secret "$(openssl rand -hex 32)"
 gravar_se_novo seed-gestor-senha "$(gerar_senha)"
