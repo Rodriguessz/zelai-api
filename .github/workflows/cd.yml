@@ -95,7 +95,7 @@ jobs:
           sparse-checkout: scripts
 
       - name: Baixar pacote
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v8
         with:
           name: app
 
